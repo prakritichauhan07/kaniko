@@ -15,11 +15,10 @@
 # Builds the static Go image to execute in a Kubernetes job
 
 FROM golang:1.14
-if [ "$(uname -m)" == "aarch64"]
-then
-  arch = amd64
-else
-  arch = arm64
+RUN if [ "$(uname -m)" == "aarch64"]; then \
+arch = amd64 \
+else \
+arch = arm64 \
 fi
 ARG GOARCH=$(arch)
 WORKDIR /go/src/github.com/GoogleContainerTools/kaniko
