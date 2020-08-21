@@ -21,6 +21,8 @@ else \
   arch=arm64; \
 fi
 ARG GOARCH=$(arch)
+RUN echo "ARCH"
+RUN echo $(arch)
 WORKDIR /go/src/github.com/GoogleContainerTools/kaniko
 # Get GCR credential helper
 ADD https://github.com/GoogleCloudPlatform/docker-credential-gcr/releases/download/v2.0.1/docker-credential-gcr_linux_$(arch)-2.0.1.tar.gz /usr/local/bin/
