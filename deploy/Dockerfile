@@ -15,7 +15,7 @@
 # Builds the static Go image to execute in a Kubernetes job
 
 FROM golang:1.14
-RUN if [ "$(shell uname -m)" = "aarch64"]; then \
+RUN if [ `$(uname -m)` = "aarch64"] ; then \
   arch1=amd64; \
 else \
   arch1=arm64; \
