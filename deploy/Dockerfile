@@ -15,46 +15,64 @@
 # Builds the static Go image to execute in a Kubernetes job
 
 FROM golang:1.14
-RUN arch=`uname -m` && \
-    if [ $arch = "aarch64"] ; then \
-      arch1=amd64; \
+ARG TARGETPLATFORM
+RUN if [ $(TARGETPLATFORM) = "aarch64"] ; then \
+        GOARCH=arm64 && \
+        echo ${GOARCH} && \
+        cd /go/src/github.com/GoogleContainerTools/kaniko && \
+        # Get GCR credential helper
+        wget https://github.com/GoogleCloudPlatform/docker-credential-gcr/releases/download/v2.0.1/docker-credential-gcr_linux_arm64-2.0.1.tar.gz -O /usr/local/bin/ && \
+        tar --no-same-owner -C /usr/local/bin/ -xvzf /usr/local/bin/docker-credential-gcr_linux_arm64-2.0.1.tar.gz && \
+        # Get Amazon ECR credential helper
+        go get -u github.com/awslabs/amazon-ecr-credential-helper/ecr-login/cli/docker-credential-ecr-login && \
+        make -C /go/src/github.com/awslabs/amazon-ecr-credential-helper linux-arm64 && \
+        # ACR docker credential helper
+        wget https://aadacr.blob.core.windows.net/acr-docker-credential-helper/docker-credential-acr-linux-arm64.tar.gz -O /usr/local/bin && \
+        RUN tar --no-same-owner -C /usr/local/bin/ -xvzf /usr/local/bin/docker-credential-acr-linux-arm64.tar.gz && \
+        # Add .docker config dir
+        mkdir -p /kaniko/.docker && \
+
+        cp . . && \
+        make GOARCH=${GOARCH}; && \
+
     else \
-      arch1=arm64; \
+        ARG GOARCH=amd64 && \
+        RUN echo ${GOARCH} && \
+        cd /go/src/github.com/GoogleContainerTools/kaniko && \
+        # Get GCR credential helper
+        wget https://github.com/GoogleCloudPlatform/docker-credential-gcr/releases/download/v2.0.1/docker-credential-gcr_linux_amd64-2.0.1.tar.gz -O /usr/local/bin/ && \
+        tar --no-same-owner -C /usr/local/bin/ -xvzf /usr/local/bin/docker-credential-gcr_linux_amd64-2.0.1.tar.gz && \
+        # Get Amazon ECR credential helper
+        go get -u github.com/awslabs/amazon-ecr-credential-helper/ecr-login/cli/docker-credential-ecr-login && \
+        make -C /go/src/github.com/awslabs/amazon-ecr-credential-helper linux-amd64 && \
+        # ACR docker credential helper
+        wget https://aadacr.blob.core.windows.net/acr-docker-credential-helper/docker-credential-acr-linux-amd64.tar.gz -O /usr/local/bin && \
+        tar --no-same-owner -C /usr/local/bin/ -xvzf /usr/local/bin/docker-credential-acr-linux-amd64.tar.gz && \
+        # Add .docker config dir
+        mkdir -p /kaniko/.docker && \
+
+        cp . . && \
+        make GOARCH=${GOARCH}; \
     fi
-ARG GOARCH=$(arch1)
-RUN echo "ARCH"
-RUN echo $(arch1)
-RUN echo ${GOARCH}
-WORKDIR /go/src/github.com/GoogleContainerTools/kaniko
-# Get GCR credential helper
-ADD https://github.com/GoogleCloudPlatform/docker-credential-gcr/releases/download/v2.0.1/docker-credential-gcr_linux_$(arch1)-2.0.1.tar.gz /usr/local/bin/
-RUN tar --no-same-owner -C /usr/local/bin/ -xvzf /usr/local/bin/docker-credential-gcr_linux_$(arch1)-2.0.1.tar.gz
-# Get Amazon ECR credential helper
-RUN go get -u github.com/awslabs/amazon-ecr-credential-helper/ecr-login/cli/docker-credential-ecr-login
-RUN make -C /go/src/github.com/awslabs/amazon-ecr-credential-helper linux-$(arch1)
-# ACR docker credential helper
-ADD https://aadacr.blob.core.windows.net/acr-docker-credential-helper/docker-credential-acr-linux-$(arch1).tar.gz /usr/local/bin
-RUN tar --no-same-owner -C /usr/local/bin/ -xvzf /usr/local/bin/docker-credential-acr-linux-$(arch).tar.gz
-# Add .docker config dir
-RUN mkdir -p /kaniko/.docker
-
-COPY . .
-RUN make GOARCH=${GOARCH}
-
-FROM scratch
-COPY --from=0 /go/src/github.com/GoogleContainerTools/kaniko/out/executor /kaniko/executor
-COPY --from=0 /usr/local/bin/docker-credential-gcr /kaniko/docker-credential-gcr
-COPY --from=0 /go/src/github.com/awslabs/amazon-ecr-credential-helper/bin/linux-$(arch)/docker-credential-ecr-login /kaniko/docker-credential-ecr-login
-COPY --from=0 /usr/local/bin/docker-credential-acr-linux /kaniko/docker-credential-acr
-COPY files/ca-certificates.crt /kaniko/ssl/certs/
-COPY --from=0 /kaniko/.docker /kaniko/.docker
-COPY files/nsswitch.conf /etc/nsswitch.conf
-ENV HOME /root
-ENV USER root
-ENV PATH /usr/local/bin:/kaniko
-ENV SSL_CERT_DIR=/kaniko/ssl/certs
-ENV DOCKER_CONFIG /kaniko/.docker/
-ENV DOCKER_CREDENTIAL_GCR_CONFIG /kaniko/.config/gcloud/docker_credential_gcr_config.json
-WORKDIR /workspace
-RUN ["docker-credential-gcr", "config", "--token-source=env"]
-ENTRYPOINT ["/kaniko/executor"]
+    FROM scratch
+    COPY --from=0 /go/src/github.com/GoogleContainerTools/kaniko/out/executor /kaniko/executor
+    COPY --from=0 /usr/local/bin/docker-credential-gcr /kaniko/docker-credential-gcr
+    RUN if [ $(TARGETPLATFORM) = "aarch64"] ; then \
+            cp --from=0 /go/src/github.com/awslabs/amazon-ecr-credential-helper/bin/linux-amd64/docker-credential-ecr-login /kaniko/docker-credential-ecr-login; \
+        else \
+            cp --from=0 /go/src/github.com/awslabs/amazon-ecr-credential-helper/bin/linux-amd64/docker-credential-ecr-login /kaniko/docker-credential-ecr-login; \
+        fi
+    COPY --from=0 /usr/local/bin/docker-credential-acr-linux /kaniko/docker-credential-acr
+    COPY files/ca-certificates.crt /kaniko/ssl/certs/
+    COPY --from=0 /kaniko/.docker /kaniko/.docker
+    COPY files/nsswitch.conf /etc/nsswitch.conf
+    ENV HOME /root
+    ENV USER root
+    ENV PATH /usr/local/bin:/kaniko
+    ENV SSL_CERT_DIR=/kaniko/ssl/certs
+    ENV DOCKER_CONFIG /kaniko/.docker/
+    ENV DOCKER_CREDENTIAL_GCR_CONFIG /kaniko/.config/gcloud/docker_credential_gcr_config.json
+    WORKDIR /workspace
+    RUN ["docker-credential-gcr", "config", "--token-source=env"]
+    ENTRYPOINT ["/kaniko/executor"]
+    
