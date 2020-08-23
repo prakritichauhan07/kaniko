@@ -54,7 +54,7 @@ RUN if [ $(TARGETPLATFORM) = "aarch64"] ; then \
         cp . . && \
         make GOARCH=${GOARCH}; \
     fi
-    FROM scratch
+    FROM scratch 
     COPY --from=0 /go/src/github.com/GoogleContainerTools/kaniko/out/executor /kaniko/executor
     COPY --from=0 /usr/local/bin/docker-credential-gcr /kaniko/docker-credential-gcr
     RUN if [ $(TARGETPLATFORM) = "aarch64"] ; then \
